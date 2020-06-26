@@ -17,4 +17,4 @@ router.route('/').get(authController.protect, tourController.getAllTours).post(t
 router.route('/:id').get(tourController.getTour).patch(tourController.updateTour).delete(authController.protect, authController.restrictTo('admin','lead-guide'), tourController.deleteTour);
 // router.route('/:tourId/reviews').post(authController.protect, authController.restrictTo('user'), reviewController.createReview)
 
-module.exports = router; 
+module.exports = router;

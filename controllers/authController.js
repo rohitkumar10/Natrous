@@ -21,7 +21,7 @@ const createSendToken = (user, statusCode, res) => {
     }
     if(process.env.NODE_ENV === 'production') cookieOptions.secure = true
     res.cookie('jwt', token, cookieOptions);
-    user.password=undefined
+    user.password=undefined;
     res.status(statusCode).json({
         status: 'success',
         token,
@@ -40,15 +40,15 @@ exports.signup = catchAsync( async (req, res, next) => {
     //     passwordConfirm: req.body.passwordConfirm
     // })
 
-    const token = signToken(newUser._id); 
+    createSendToken(newUser, 201, res);
 
-    res.status(200).json({
-        status: 'success',
-        token,
-        data:{
-            newUser
-        }
-    })
+    // res.status(200).json({
+    //     status: 'success',
+    //     token,
+    //     data:{
+    //         newUser
+    //     }
+    // })
 })
 
 exports.login = catchAsync( async (req, res, next) => {
@@ -62,11 +62,7 @@ exports.login = catchAsync( async (req, res, next) => {
         return next(new AppError('Incorrect email or password', 401))
     }
 
-    const token = signToken(user._id);
-    res.status(200).json({
-        status: 'success',
-        token
-    })
+    createSendToken(user, 200, res);
 })
 
 exports.protect = catchAsync( async(req, res, next) => {
@@ -92,6 +88,25 @@ exports.protect = catchAsync( async(req, res, next) => {
     }
 
     req.user = currentUser;
+    next();
+})
+
+exports.isLoggedIn = catchAsync( async(req, res, next) => {
+    if(req.cookies.jwt){
+        const decoded = await promisify(jwt.verify)(req.cookies.jwt, process.env.JWT_SECRET);
+
+        const currentUser = await User.findById(decoded.id);
+        if(!currentUser){
+            return next();
+        }
+        
+        if(currentUser.changedPasswordAfter(decoded.iat)){
+            return next()
+        }
+
+        res.locals.user = currentUser;
+        return next();
+    }
     next();
 })
 

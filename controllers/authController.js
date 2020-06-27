@@ -32,13 +32,13 @@ const createSendToken = (user, statusCode, res) => {
 }
 
 exports.signup = catchAsync( async (req, res, next) => {
-     const newUser = await User.create(req.body);
-    // const newUser = await User.create({
-    //     name: req.body.name,
-    //     email: req.body.email,
-    //     password: req.body.password,
-    //     passwordConfirm: req.body.passwordConfirm
-    // })
+    //  const newUser = await User.create(req.body);
+    const newUser = await User.create({
+        name: req.body.name,
+        email: req.body.email,
+        password: req.body.password,
+        passwordConfirm: req.body.passwordConfirm
+    })
 
     createSendToken(newUser, 201, res);
 
@@ -66,6 +66,8 @@ exports.login = catchAsync( async (req, res, next) => {
 })
 
 exports.protect = catchAsync( async(req, res, next) => {
+    //console.log('protect')
+
     let token;
     if(req.headers.authorization && req.headers.authorization.startsWith('Bearer')){
         token = req.headers.authorization.split(' ')[1];
@@ -76,39 +78,56 @@ exports.protect = catchAsync( async(req, res, next) => {
         return next(new AppError('You are not logged in! Please log in to get secret access', 401));
     }
 
+    //console.log('protect2')
+
     const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
 
     const currentUser = await User.findById(decoded.id);
     if(!currentUser){
         return next(new AppError('The user with ths token no longer exist', 401));
     }
+    //console.log('protect3')
     
     if(currentUser.changedPasswordAfter(decoded.iat)){
         return next(new AppError('User recently changed the password Please log in again',401))
     }
+    //console.log('protect4')
 
     req.user = currentUser;
+    res.locals.user = currentUser;
     next();
 })
 
-exports.isLoggedIn = catchAsync( async(req, res, next) => {
+exports.isLoggedIn = async(req, res, next) => {
     if(req.cookies.jwt){
-        const decoded = await promisify(jwt.verify)(req.cookies.jwt, process.env.JWT_SECRET);
+        try{
+            const decoded = await promisify(jwt.verify)(req.cookies.jwt, process.env.JWT_SECRET);
 
-        const currentUser = await User.findById(decoded.id);
-        if(!currentUser){
+            const currentUser = await User.findById(decoded.id);
+            if(!currentUser){
+                return next();
+            }
+            
+            if(currentUser.changedPasswordAfter(decoded.iat)){
+                return next()
+            }
+
+            res.locals.user = currentUser;
+            return next();
+        } catch(err){
             return next();
         }
-        
-        if(currentUser.changedPasswordAfter(decoded.iat)){
-            return next()
-        }
-
-        res.locals.user = currentUser;
-        return next();
     }
     next();
-})
+}
+
+exports.logout = (req, res) => {
+    res.cookie('jwt', 'loggedout', {
+        expires: new Date(Date.now() + 10 * 1000),
+        httpOnly: true
+    });
+    res.status(200).json({ status: 'success' });
+}
 
 exports.restrictTo = (...roles) => {
     return (req, res, next) => {
